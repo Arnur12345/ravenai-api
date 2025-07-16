@@ -14,6 +14,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True) # Added index=True
     email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
     name = Column(String(100))
     image_url = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
@@ -39,11 +40,12 @@ class Meeting(Base):
     platform = Column(String(100), nullable=False) # e.g., 'google_meet', 'zoom'
     # Database column name is platform_specific_id but we use native_meeting_id in the code
     platform_specific_id = Column(String(255), index=True, nullable=True)
+    title = Column(Text, nullable=True) # Meeting title
     status = Column(String(50), nullable=False, default='requested', index=True)
     bot_container_id = Column(String(255), nullable=True)
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
-    data = Column(JSONB, nullable=False, default=text("'{}'::jsonb"))
+    data = Column(JSONB, nullable=False, default=text("'{}'"))
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

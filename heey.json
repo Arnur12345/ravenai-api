@@ -1,0 +1,16 @@
+curl -X POST http://localhost:18056/bots \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: nLr1Sh37KkPTPjX1MSgHwGpxCEoJ8EV5ZttpPvkg" \
+  -d '{
+    "platform": "google_meet",
+    "native_meeting_id": "tun-njym-qom",
+    "bot_name": "Heey",
+    "language": "en",
+    "task": "transcribe"
+  }'
+
+  # GET /transcripts/{platform}/{native_meeting_id}
+# Example assumes native_meeting_id is derived from the meeting URL
+curl -X DELETE \
+  http://localhost:18056/bots/google_meet/tun-njym-qom \
+  -H 'X-API-Key: pmqOiHOLC2lMbga0pIbM9hP7Q6aasNo8LycVt7vc'

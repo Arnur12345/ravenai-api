@@ -3,6 +3,7 @@ import secrets
 import string
 import os
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Security, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -14,7 +15,8 @@ from pydantic import BaseModel, HttpUrl
 
 # Import shared models and schemas
 from shared_models.models import User, APIToken, Base, Meeting # Import Base for init_db and Meeting
-from shared_models.schemas import UserCreate, UserResponse, TokenResponse, UserDetailResponse, UserBase, UserUpdate, MeetingResponse # Import UserBase for update and UserUpdate schema
+from shared_models.schemas import UserCreate, UserResponse, TokenResponse, UserDetailResponse, UserBase, UserUpdate, UserPutUpdate, UserMeetingCountResponse, MeetingStatusCount, MeetingResponse, UserLogin, UserLoginResponse # Import UserBase for update and new schemas
+from shared_models.auth_utils import hash_password, verify_password # Import password hashing utility
 
 # Database utilities (needs to be created)
 from shared_models.database import get_db, init_db # New import
@@ -27,7 +29,63 @@ logging.basicConfig(
 logger = logging.getLogger("admin_api")
 
 # App initialization
-app = FastAPI(title="Vexa Admin API")
+app = FastAPI(
+    title="Vexa Admin API",
+    description="""
+    **Administrative API for Vexa platform user and token management.**
+    
+    🚀 **Quick Start:**
+    ```bash
+    # 1. Create a user
+    curl -X POST http://localhost:18057/admin/users \\
+      -H "X-Admin-API-Key: qP4zo7lWA84W2iIqa6dtI884K3slfPli61mFlr5v" \\
+      -H "Content-Type: application/json" \\
+      -d '{"email":"user@example.com","name":"John Doe","password":"securepassword123"}'
+    
+    # 2. Generate API token for user
+    curl -X POST http://localhost:18057/admin/users/USER_ID/tokens \\
+      -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN"
+    ```
+    
+    ## Authentication
+    
+    **Required:** `X-Admin-API-Key` header for all admin operations.
+    
+    Set the admin token via `ADMIN_API_TOKEN` environment variable.
+    
+    ## Common Operations
+    
+    **Create User:**
+    ```bash
+    curl -X POST http://localhost:18057/admin/users \\
+      -H "X-Admin-API-Key: qP4zo7lWA84W2iIqa6dtI884K3slfPli61mFlr5v" \\
+      -H "Content-Type: application/json" \\
+      -d '{"email":"user@example.com","name":"John Doe","password":"securepassword123"}'
+    ```
+    
+    **List Users:**
+    ```bash
+    curl -X GET http://localhost:18057/admin/users \\
+      -H "X-Admin-API-Key: qP4zo7lWA84W2iIqa6dtI884K3slfPli61mFlr5v"
+    ```
+    
+    **Generate Token:**
+    ```bash
+    curl -X POST http://localhost:18057/admin/users/1/tokens \\
+      -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN"
+    ```
+    """,
+    version="1.1.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Pydantic Schemas for new endpoint ---
 class WebhookUpdate(BaseModel):
@@ -92,10 +150,126 @@ user_router = APIRouter(
     dependencies=[Depends(get_current_user)]
 )
 
+auth_router = APIRouter(
+    prefix="/auth",
+    tags=["Auth"],
+)
+
 # --- Helper Functions --- 
 def generate_secure_token(length=40):
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for i in range(length))
+
+@auth_router.post("/login", response_model=UserLoginResponse, summary="Login with email and password", description="Login with email and password to get a token.")
+async def login(user_in: UserLogin, response: Response, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == user_in.email))
+    existing_user = result.scalars().first()
+
+    if not existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not found user"
+        )
+    
+    # Verify the password
+    # Need to import verify_password function to properly check hashed passwords
+    # The current code is hashing the input password and comparing to stored hash
+    
+    if not verify_password(user_in.password, existing_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+    
+    # Generate a new API token for the user
+    new_token = generate_secure_token()
+    db_token = APIToken(
+        token=new_token,
+        user_id=existing_user.id
+    )
+    db.add(db_token)
+    await db.commit()
+    
+    logger.info(f"Successfully logged in user: {existing_user.email} (ID: {existing_user.id})")
+    response.status_code = status.HTTP_200_OK
+    return UserLoginResponse(user=UserResponse.from_orm(existing_user), token=new_token)
+
+@auth_router.post("/register", response_model=UserLoginResponse, summary="Register a new user", description="Register a new user with email and password.")
+async def register(user_in: UserCreate, response: Response, db: AsyncSession = Depends(get_db)):
+    # Check if user already exists
+    result = await db.execute(select(User).where(User.email == user_in.email))
+    existing_user = result.scalars().first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists"
+        )
+
+    # Hash the password before storing
+    user_data = user_in.dict()
+    hashed_password = hash_password(user_data['password'])
+    
+    # Create new user
+    db_user = User(
+        email=user_data['email'],
+        name=user_data.get('name'),
+        image_url=user_data.get('image_url'),
+        hashed_password=hashed_password,
+        max_concurrent_bots=user_data.get('max_concurrent_bots', 1),
+        data=user_data.get('data', {})
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    
+    # Generate API token for the new user
+    new_token = generate_secure_token()
+    db_token = APIToken(
+        token=new_token,
+        user_id=db_user.id
+    )
+    db.add(db_token)
+    await db.commit()
+    
+    logger.info(f"Successfully registered new user: {db_user.email} (ID: {db_user.id})")
+    response.status_code = status.HTTP_201_CREATED
+    return UserLoginResponse(user=UserResponse.from_orm(db_user), token=new_token)
+
+@auth_router.post("/logout", 
+                 status_code=status.HTTP_200_OK,
+                 summary="Logout user and invalidate token",
+                 description="Logout the current user by invalidating their API token.")
+async def logout(api_key: str = Security(USER_API_KEY_HEADER), db: AsyncSession = Depends(get_db)):
+    """
+    Logout the current user by invalidating their API token.
+    The API key used for this request will be deleted from the database.
+    """
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Missing API Key"
+        )
+
+    # Find the token in the database
+    result = await db.execute(
+        select(APIToken).where(APIToken.token == api_key).options(selectinload(APIToken.user))
+    )
+    db_token = result.scalars().first()
+
+    if not db_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid API Key"
+        )
+
+    # Delete the token to invalidate it
+    await db.delete(db_token)
+    await db.commit()
+    
+    logger.info(f"User {db_token.user.email} (ID: {db_token.user.id}) logged out successfully")
+    
+    return {"message": "Successfully logged out"}
 
 # --- User Endpoints ---
 @user_router.put("/webhook",
@@ -126,11 +300,68 @@ async def set_user_webhook(
     
     return UserResponse.from_orm(user)
 
+@user_router.get("/meetings/count",
+             response_model=UserMeetingCountResponse,
+             summary="Get authenticated user's meeting count",
+             description="Get the total number of meetings and breakdown by status for the authenticated user.")
+async def get_current_user_meeting_count(
+    user: User = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get meeting count statistics for the currently authenticated user.
+    Returns total count and breakdown by meeting status.
+    """
+    user_id = user.id
+
+    # Get total meeting count
+    total_result = await db.execute(
+        select(func.count(Meeting.id)).where(Meeting.user_id == user_id)
+    )
+    total_meetings = total_result.scalar_one()
+
+    # Get count by status
+    status_counts = {}
+    status_list = ['active', 'completed', 'requested', 'stopping', 'failed']
+    
+    for status_name in status_list:
+        count_result = await db.execute(
+            select(func.count(Meeting.id)).where(
+                Meeting.user_id == user_id,
+                Meeting.status == status_name
+            )
+        )
+        status_counts[status_name] = count_result.scalar_one()
+
+    # Create response using the schema
+    status_breakdown = MeetingStatusCount(**status_counts)
+    
+    response = UserMeetingCountResponse(
+        user_id=user_id,
+        total_meetings=total_meetings,
+        by_status=status_breakdown
+    )
+    
+    logger.info(f"User {user_id} requested their meeting count: {total_meetings} total meetings")
+    return response
+
 # --- Admin Endpoints (Copied and adapted from bot-manager/admin.py) --- 
 @admin_router.post("/users",
              response_model=UserResponse,
              status_code=status.HTTP_201_CREATED,
              summary="Find or create a user by email",
+             description="""Find or create a user by email address. If user exists, returns existing user. If not, creates new user.
+
+**Example:**
+```bash
+curl -X POST http://localhost:18057/admin/users \\
+  -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"user@example.com","name":"John Doe","password":"securepassword123"}'
+```
+
+**Required fields:** `email`, `password`
+**Optional fields:** `name`, `image_url`, `max_concurrent_bots`, `data`""",
              responses={
                  status.HTTP_200_OK: {
                      "description": "User found and returned",
@@ -151,10 +382,16 @@ async def create_user(user_in: UserCreate, response: Response, db: AsyncSession 
         return UserResponse.from_orm(existing_user)
 
     user_data = user_in.dict()
+    # Hash the password before storing
+    hashed_password = hash_password(user_data['password'])
+    
     db_user = User(
         email=user_data['email'],
         name=user_data.get('name'),
-        image_url=user_data.get('image_url')
+        image_url=user_data.get('image_url'),
+        hashed_password=hashed_password,
+        max_concurrent_bots=user_data.get('max_concurrent_bots', 1),
+        data=user_data.get('data', {})
     )
     db.add(db_user)
     await db.commit()
@@ -164,7 +401,16 @@ async def create_user(user_in: UserCreate, response: Response, db: AsyncSession 
 
 @admin_router.get("/users", 
             response_model=List[UserResponse], # Use List import
-            summary="List all users")
+            summary="List all users",
+            description="""Get a paginated list of all users in the system.
+
+**Example:**
+```bash
+curl -X GET http://localhost:18057/admin/users \\
+  -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN"
+```
+
+**Optional parameters:** `skip` (default: 0), `limit` (default: 100)""")
 async def list_users(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).offset(skip).limit(limit))
     users = result.scalars().all()
@@ -216,7 +462,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
 @admin_router.patch("/users/{user_id}",
              response_model=UserResponse,
              summary="Update user details",
-             description="Update user's name, image URL, or max concurrent bots.")
+             description="Update user's name, image URL, max concurrent bots, or password. Password will be automatically hashed.")
 async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = Depends(get_db)):
     """
     Updates specific fields of a user.
@@ -238,6 +484,12 @@ async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = 
          raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change user email via this endpoint.")
     elif 'email' in update_data:
          del update_data['email'] # Don't attempt to update email to the same value
+
+    # Handle password hashing if password is provided
+    if 'password' in update_data:
+        hashed_password = hash_password(update_data['password'])
+        update_data['hashed_password'] = hashed_password
+        del update_data['password']  # Remove plain password from update_data
 
     # Update the user object attributes
     updated = False
@@ -261,10 +513,159 @@ async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = 
 
     return UserResponse.from_orm(db_user)
 
+@admin_router.put("/users/{user_id}",
+             response_model=UserResponse,
+             summary="Update user with PUT (partial updates allowed)",
+             description="""Update user fields using PUT method. All fields are optional - only provide fields you want to change.
+
+**Example:**
+```bash
+curl -X PUT http://localhost:18057/admin/users/1 \\
+  -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"max_concurrent_bots": 5, "data": {"role": "admin"}, "password": "newpassword123"}'
+```
+
+**Supported fields:** `email`, `name`, `image_url`, `max_concurrent_bots`, `data`, `password` (will be hashed automatically)""")
+async def put_update_user(user_id: int, user_update: UserPutUpdate, db: AsyncSession = Depends(get_db)):
+    """
+    Updates user fields using PUT method with partial update support.
+    Only provided fields will be updated.
+    Requires admin privileges.
+    """
+    # Fetch the user to update
+    result = await db.execute(select(User).where(User.id == user_id))
+    db_user = result.scalars().first()
+
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Get the update data, excluding unset fields
+    update_data = user_update.dict(exclude_unset=True)
+    
+    if not update_data:
+        # No fields provided for update
+        logger.info(f"PUT update for user {user_id}: no fields provided")
+        return UserResponse.from_orm(db_user)
+
+    # Handle password hashing if password is provided
+    if 'password' in update_data:
+        hashed_password = hash_password(update_data['password'])
+        update_data['hashed_password'] = hashed_password
+        del update_data['password']  # Remove plain password from update_data
+
+    # Handle data field specially for JSONB
+    if 'data' in update_data:
+        new_data = update_data['data']
+        if db_user.data is None:
+            db_user.data = {}
+        
+        # Merge the new data with existing data
+        if isinstance(new_data, dict):
+            db_user.data.update(new_data)
+            # Flag the 'data' field as modified for SQLAlchemy to detect the change
+            attributes.flag_modified(db_user, "data")
+        else:
+            db_user.data = new_data
+            attributes.flag_modified(db_user, "data")
+        
+        # Remove data from update_data as we handled it manually
+        del update_data['data']
+
+    # Update other user object attributes
+    updated = False
+    for key, value in update_data.items():
+        if hasattr(db_user, key) and getattr(db_user, key) != value:
+            setattr(db_user, key, value)
+            updated = True
+
+    # Mark as updated if data was modified
+    if 'data' in user_update.dict(exclude_unset=True):
+        updated = True
+
+    # If any changes were made, commit them
+    if updated:
+        try:
+            await db.commit()
+            await db.refresh(db_user)
+            logger.info(f"Admin PUT updated user ID: {user_id}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error PUT updating user {user_id}: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update user.")
+    else:
+        logger.info(f"Admin attempted PUT update for user ID: {user_id}, but no changes detected.")
+
+    return UserResponse.from_orm(db_user)
+
+@admin_router.get("/users/{user_id}/meetings/count",
+             response_model=UserMeetingCountResponse,
+             summary="Get meeting count for a specific user",
+             description="""Get the total number of meetings and breakdown by status for a specific user.
+
+**Example:**
+```bash
+curl -X GET http://localhost:18057/admin/users/1/meetings/count \\
+  -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN"
+```
+
+**Returns:** Meeting count statistics including total and breakdown by status.""")
+async def get_user_meeting_count(user_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get meeting count statistics for a specific user.
+    Returns total count and breakdown by meeting status.
+    """
+    # Verify user exists
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Get total meeting count
+    total_result = await db.execute(
+        select(func.count(Meeting.id)).where(Meeting.user_id == user_id)
+    )
+    total_meetings = total_result.scalar_one()
+
+    # Get count by status
+    status_counts = {}
+    status_list = ['active', 'completed', 'requested', 'stopping', 'failed']
+    
+    for status_name in status_list:
+        count_result = await db.execute(
+            select(func.count(Meeting.id)).where(
+                Meeting.user_id == user_id,
+                Meeting.status == status_name
+            )
+        )
+        status_counts[status_name] = count_result.scalar_one()
+
+    # Create response using the schema
+    status_breakdown = MeetingStatusCount(**status_counts)
+    
+    response = UserMeetingCountResponse(
+        user_id=user_id,
+        total_meetings=total_meetings,
+        by_status=status_breakdown
+    )
+    
+    logger.info(f"Admin requested meeting count for user {user_id}: {total_meetings} total meetings")
+    return response
+
 @admin_router.post("/users/{user_id}/tokens", 
              response_model=TokenResponse,
              status_code=status.HTTP_201_CREATED,
-             summary="Generate a new API token for a user")
+             summary="Generate a new API token for a user",
+             description="""Generate a new API token for a user. The token can be used for regular API operations.
+
+**Example:**
+```bash
+curl -X POST http://localhost:18057/admin/users/1/tokens \\
+  -H "X-Admin-API-Key: YOUR_ADMIN_TOKEN"
+```
+
+**Returns:** Token object with `token` field that can be used as `X-API-Key` for user operations.""")
 async def create_token_for_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user = await db.get(User, user_id)
     if not user:
@@ -350,6 +751,7 @@ async def startup_event():
 # Include the admin router
 app.include_router(admin_router)
 app.include_router(user_router)
+app.include_router(auth_router)
 
 # Root endpoint (optional)
 @app.get("/")

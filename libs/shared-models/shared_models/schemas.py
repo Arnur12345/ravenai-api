@@ -114,7 +114,15 @@ class UserBase(BaseModel): # Base for common user fields
     data: Optional[Dict[str, Any]] = Field(None, description="JSONB storage for arbitrary user data, like webhook URLs")
 
 class UserCreate(UserBase):
-    pass
+    password: str = Field(..., description="User password (will be hashed before storage)")
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserRegisterResponse(BaseModel):
+    user: UserBase
+    token: str
 
 class UserResponse(UserBase):
     id: int
@@ -123,6 +131,10 @@ class UserResponse(UserBase):
 
     class Config:
         orm_mode = True
+
+class UserLoginResponse(BaseModel):
+    user: UserResponse
+    token: str
 
 class TokenBase(BaseModel):
     user_id: int
@@ -147,7 +159,42 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     image_url: Optional[str] = None
     max_concurrent_bots: Optional[int] = Field(None, description="Maximum number of concurrent bots allowed for the user")
+    password: Optional[str] = Field(None, description="New password (will be hashed before storage)")
 # --- END UserUpdate Schema ---
+
+# --- ADD UserPutUpdate Schema for PUT ---
+class UserPutUpdate(BaseModel):
+    """Schema for PUT requests - allows partial updates of any field"""
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    image_url: Optional[str] = None
+    max_concurrent_bots: Optional[int] = Field(None, description="Maximum number of concurrent bots allowed for the user")
+    data: Optional[Dict[str, Any]] = Field(None, description="JSONB storage for arbitrary user data, like webhook URLs")
+    password: Optional[str] = Field(None, description="New password (will be hashed before storage)")
+    
+    class Config:
+        # Allow partial updates - skip None values
+        exclude_none = True
+# --- END UserPutUpdate Schema ---
+
+# --- ADD Meeting Count Schemas ---
+class MeetingStatusCount(BaseModel):
+    """Count of meetings by status"""
+    active: int = 0
+    completed: int = 0
+    requested: int = 0
+    stopping: int = 0
+    failed: int = 0
+    
+class UserMeetingCountResponse(BaseModel):
+    """Response for meeting count endpoint"""
+    user_id: int
+    total_meetings: int = Field(..., description="Total number of meetings for the user")
+    by_status: MeetingStatusCount = Field(..., description="Breakdown of meetings by status")
+    
+    class Config:
+        orm_mode = True
+# --- END Meeting Count Schemas ---
 
 # --- Meeting Schemas --- 
 
@@ -299,4 +346,4 @@ class BotStatus(BaseModel):
 
 class BotStatusResponse(BaseModel):
     running_bots: List[BotStatus]
-# --- END Bot Status Schemas --- 
+# --- END Bot Status Schemas ---
