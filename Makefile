@@ -8,9 +8,9 @@ all: setup-env build-bot-image build up migrate-or-init
 setup-env: env submodules download-model
 	@echo "Environment setup complete."
 	@echo "The 'env' target (now called by setup-env) handles .env creation/preservation:"
-	@echo "  - If .env exists, it is preserved."
-	@echo "  - If .env does not exist, it is created based on the TARGET variable (e.g., 'make setup-env TARGET=gpu')."
-	@echo "  - If .env is created and no TARGET is specified, it defaults to 'cpu'."
+	@echo " 	- If .env exists, it is preserved."
+	@echo " 	- If .env does not exist, it is created based on the TARGET variable (e.g., 'make setup-env TARGET=gpu')."
+	@echo " 	- If .env is created and no TARGET is specified, it defaults to 'cpu'."
 	@echo "To force an overwrite of an existing .env file, use 'make force-env TARGET=cpu/gpu'."
 
 # Target to perform all initial setup steps
@@ -28,7 +28,7 @@ BOT_IMAGE_NAME ?= vexa-bot:dev
 # Check if Docker daemon is running
 check_docker:
 	@echo "---> Checking if Docker is running..."
-	@if ! docker info > /dev/null 2>&1; then \
+	@if ! sudo docker info > /dev/null 2>&1; then \
 		echo "ERROR: Docker is not running. Please start Docker Desktop or Docker daemon first."; \
 		exit 1; \
 	fi
@@ -156,14 +156,14 @@ build-bot-image: check_docker
 		ENV_BOT_IMAGE_NAME=$$(grep BOT_IMAGE_NAME .env | cut -d= -f2); \
 		if [ -n "$$ENV_BOT_IMAGE_NAME" ]; then \
 			echo "---> Building $$ENV_BOT_IMAGE_NAME image (from .env)..."; \
-			docker build -t $$ENV_BOT_IMAGE_NAME -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
+			sudo docker build -t $$ENV_BOT_IMAGE_NAME -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
 		else \
 			echo "---> Building $(BOT_IMAGE_NAME) image (BOT_IMAGE_NAME not found in .env)..."; \
-			docker build -t $(BOT_IMAGE_NAME) -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
+			sudo docker build -t $(BOT_IMAGE_NAME) -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
 		fi; \
 	else \
 		echo "---> Building $(BOT_IMAGE_NAME) image (.env file not found)..."; \
-		docker build -t $(BOT_IMAGE_NAME) -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
+		sudo docker build -t $(BOT_IMAGE_NAME) -f services/vexa-bot/core/Dockerfile ./services/vexa-bot/core; \
 	fi
 
 # Build Docker Compose service images
@@ -171,13 +171,13 @@ build: check_docker
 	@echo "---> Building Docker images..."
 	@if [ "$(TARGET)" = "cpu" ]; then \
 		echo "---> Building with 'cpu' profile (includes whisperlive-cpu)..."; \
-		docker compose --profile cpu build; \
+		sudo docker compose --profile cpu build; \
 	elif [ "$(TARGET)" = "gpu" ]; then \
 		echo "---> Building with 'gpu' profile (includes whisperlive GPU)..."; \
-		docker compose --profile gpu build; \
+		sudo docker compose --profile gpu build; \
 	else \
 		echo "---> TARGET not explicitly set, defaulting to CPU mode. 'whisperlive' (GPU) will not be built."; \
-		docker compose --profile cpu build; \
+		sudo docker compose --profile cpu build; \
 	fi
 
 # Start services in detached mode
@@ -185,27 +185,27 @@ up: check_docker
 	@echo "---> Starting Docker Compose services..."
 	@if [ "$(TARGET)" = "cpu" ]; then \
 		echo "---> Activating 'cpu' profile to start whisperlive-cpu along with other services..."; \
-		docker compose --profile cpu up -d; \
+		sudo docker compose --profile cpu up -d; \
 	elif [ "$(TARGET)" = "gpu" ]; then \
 		echo "---> Starting services for GPU. This will start 'whisperlive' (for GPU) and other default services. 'whisperlive-cpu' (profile=cpu) will not be started."; \
-		docker compose --profile gpu up -d; \
+		sudo docker compose --profile gpu up -d; \
 	else \
 		echo "---> TARGET not explicitly set, defaulting to CPU mode. 'whisperlive' (GPU) will not be started."; \
-		docker compose --profile cpu up -d; \
+		sudo docker compose --profile cpu up -d; \
 	fi
 
 # Stop services
 down: check_docker
 	@echo "---> Stopping Docker Compose services..."
-	@docker compose down
+	@sudo docker compose down
 
 # Show container status
 ps: check_docker
-	@docker compose ps
+	@sudo docker compose ps
 
 # Tail logs for all services
 logs:
-	@docker compose logs -f
+	@sudo docker compose logs -f
 
 # Run the interaction test script
 test: check_docker
@@ -216,11 +216,11 @@ test: check_docker
 		ADMIN_PORT=$$(grep -E '^[[:space:]]*ADMIN_API_HOST_PORT=' .env | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
 		[ -z "$$API_PORT" ] && API_PORT=8056; \
 		[ -z "$$ADMIN_PORT" ] && ADMIN_PORT=8057; \
-		echo "    Main API:  http://localhost:$$API_PORT/docs"; \
-		echo "    Admin API: http://localhost:$$ADMIN_PORT/docs"; \
+		echo " 	Main API:  http://localhost:$$API_PORT/docs"; \
+		echo " 	Admin API: http://localhost:$$ADMIN_PORT/docs"; \
 	else \
-		echo "    Main API:  http://localhost:8056/docs"; \
-		echo "    Admin API: http://localhost:8057/docs"; \
+		echo " 	Main API:  http://localhost:8056/docs"; \
+		echo " 	Admin API: http://localhost:8057/docs"; \
 	fi
 	@chmod +x run_vexa_interaction.sh
 	@./run_vexa_interaction.sh
@@ -232,13 +232,13 @@ test: check_docker
 migrate-or-init: check_docker
 	@echo "---> Starting smart database migration/initialization..."; \
 	set -e; \
-	if ! docker-compose ps -q postgres | grep -q .; then \
+	if ! sudo docker compose ps -q postgres | grep -q .; then \
 		echo "ERROR: PostgreSQL container is not running. Please run 'make up' first."; \
 		exit 1; \
 	fi; \
 	echo "---> Waiting for database to be ready..."; \
 	count=0; \
-	while ! docker-compose exec -T postgres pg_isready -U postgres -d vexa -q; do \
+	while ! sudo docker compose exec -T postgres pg_isready -U postgres -d vexa -q; do \
 		if [ $$count -ge 12 ]; then \
 			echo "ERROR: Database did not become ready in 60 seconds."; \
 			exit 1; \
@@ -248,32 +248,32 @@ migrate-or-init: check_docker
 		count=$$((count+1)); \
 	done; \
 	echo "---> Database is ready. Checking its state..."; \
-	if docker-compose exec -T postgres psql -U postgres -d vexa -t -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version';" | grep -q 1; then \
+	if sudo docker compose exec -T postgres psql -U postgres -d vexa -t -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version';" | grep -q 1; then \
 		echo "STATE: Alembic-managed database detected."; \
 		echo "ACTION: Running standard migrations to catch up to 'head'..."; \
 		$(MAKE) migrate; \
-	elif docker-compose exec -T postgres psql -U postgres -d vexa -t -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'meetings';" | grep -q 1; then \
+	elif sudo docker compose exec -T postgres psql -U postgres -d vexa -t -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'meetings';" | grep -q 1; then \
 		echo "STATE: Legacy (non-Alembic) database detected."; \
 		echo "ACTION: Stamping at 'base' and migrating to 'head' to bring it under Alembic control..."; \
-		docker-compose exec -T transcription-collector alembic -c /app/alembic.ini stamp base; \
+		sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini stamp base; \
 		$(MAKE) migrate; \
 	else \
 		echo "STATE: Fresh, empty database detected."; \
 		echo "ACTION: Creating schema directly from models and stamping at revision dc59a1c03d1f..."; \
-		docker-compose exec -T transcription-collector python -c "import asyncio; from shared_models.database import init_db; asyncio.run(init_db())"; \
-		docker-compose exec -T transcription-collector alembic -c /app/alembic.ini stamp dc59a1c03d1f; \
+		sudo docker compose exec -T transcription-collector python -c "import asyncio; from shared_models.database import init_db; asyncio.run(init_db())"; \
+		sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini stamp dc59a1c03d1f; \
 	fi; \
 	echo "---> Smart database migration/initialization complete!"
 
 # Apply all pending migrations to bring database to latest version
 migrate: check_docker
 	@echo "---> Applying database migrations..."
-	@if ! docker-compose ps postgres | grep -q "Up"; then \
+	@if ! sudo docker compose ps postgres | grep -q "Up"; then \
 		echo "ERROR: PostgreSQL container is not running. Please run 'make up' first."; \
 		exit 1; \
 	fi
 	@echo "---> Running alembic upgrade head..."
-	@docker-compose exec -T transcription-collector alembic -c /app/alembic.ini upgrade head
+	@sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini upgrade head
 
 # Create a new migration file based on model changes
 makemigrations: check_docker
@@ -283,39 +283,39 @@ makemigrations: check_docker
 		exit 1; \
 	fi
 	@echo "---> Creating new migration: $(M)"
-	@if ! docker-compose ps postgres | grep -q "Up"; then \
+	@if ! sudo docker compose ps postgres | grep -q "Up"; then \
 		echo "ERROR: PostgreSQL container is not running. Please run 'make up' first."; \
 		exit 1; \
 	fi
-	@docker-compose exec -T transcription-collector alembic -c /app/alembic.ini revision --autogenerate -m "$(M)"
+	@sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini revision --autogenerate -m "$(M)"
 
 # Initialize the database (first time setup) - creates tables and stamps with latest revision
 init-db: check_docker
 	@echo "---> Initializing database and stamping with Alembic..."
-	docker-compose run --rm transcription-collector python -c "import asyncio; from shared_models.database import init_db; asyncio.run(init_db())"
-	docker-compose run --rm transcription-collector alembic -c /app/alembic.ini stamp head
+	sudo docker compose run --rm transcription-collector python -c "import asyncio; from shared_models.database import init_db; asyncio.run(init_db())"
+	sudo docker compose run --rm transcription-collector alembic -c /app/alembic.ini stamp head
 	@echo "---> Database initialized and stamped."
 
 # Stamp existing database with current version (for existing installations)
 stamp-db: check_docker
 	@echo "---> Stamping existing database with current migration version..."
-	@if ! docker-compose ps postgres | grep -q "Up"; then \
+	@if ! sudo docker compose ps postgres | grep -q "Up"; then \
 		echo "ERROR: PostgreSQL container is not running. Please run 'make up' first."; \
 		exit 1; \
 	fi
-	@docker-compose exec -T transcription-collector alembic -c /app/alembic.ini stamp head
+	@sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini stamp head
 	@echo "---> Database stamped successfully!"
 
 # Show current migration status
 migration-status: check_docker
 	@echo "---> Checking migration status..."
-	@if ! docker-compose ps postgres | grep -q "Up"; then \
+	@if ! sudo docker compose ps postgres | grep -q "Up"; then \
 		echo "ERROR: PostgreSQL container is not running. Please run 'make up' first."; \
 		exit 1; \
 	fi
 	@echo "---> Current database version:"
-	@docker-compose exec -T transcription-collector alembic -c /app/alembic.ini current
+	@sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini current
 	@echo "---> Migration history:"
-	@docker-compose exec -T transcription-collector alembic -c /app/alembic.ini history --verbose
+	@sudo docker compose exec -T transcription-collector alembic -c /app/alembic.ini history --verbose
 
 # --- End Database Migration Commands ---
