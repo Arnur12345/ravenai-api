@@ -147,7 +147,7 @@ download-model:
 	@echo "---> Ensuring ./hub directory is writable..."
 	@chmod u+w ./hub
 	@echo "---> Downloading Whisper model (this may take a while)..."
-	@python download_model.py
+	@python3 download_model.py
 
 # Build the standalone vexa-bot image
 # Uses BOT_IMAGE_NAME from .env if available, otherwise falls back to default
