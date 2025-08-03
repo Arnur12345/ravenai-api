@@ -65,12 +65,12 @@ The default limit is **one (1) concurrently running bot** per user account. If y
 *   **cURL Example:**
     ```bash
     curl -X POST \
-      https://gateway.dev.vexa.ai/bots \
+      https://74.161.160.54:18056/bots \
       -H 'Content-Type: application/json' \
-      -H 'X-API-Key: YOUR_API_KEY_HERE' \
+      -H 'X-API-Key: tDFbW62iQc9kThy28Qtifbjo1S4JL3m7mO99pYRX' \
       -d '{
         "platform": "google_meet",
-        "native_meeting_id": "xxx-xxxx-xxx",
+        "native_meeting_id": "nrw-njhx-ypq",
         "language": "en",
         "bot_name": "MyMeetingBot"
       }'
@@ -97,8 +97,8 @@ The default limit is **one (1) concurrently running bot** per user account. If y
 *   **cURL Example:**
     ```bash
     curl -X GET \
-      https://gateway.dev.vexa.ai/transcripts/google_meet/xxx-xxxx-xxx \
-      -H 'X-API-Key: YOUR_API_KEY_HERE'
+      http://74.161.160.54:18056/transcripts/google_meet/wwi-csxp-ehs \
+      -H 'X-API-Key: D8WvHR71og7GmS3joGQrRu353czjCFqr7mz955e0'
     ```
 
 ### Get Status of Running Bots
@@ -178,8 +178,8 @@ The default limit is **one (1) concurrently running bot** per user account. If y
 *   **cURL Example:**
     ```bash
     curl -X DELETE \
-      https://gateway.dev.vexa.ai/bots/google_meet/xxx-xxxx-xxx \
-      -H 'X-API-Key: YOUR_API_KEY_HERE'
+      https://74.161.160.54:18056/bots/google_meet/wwi-csxp-ehs \
+      -H 'X-API-Key: D8WvHR71og7GmS3joGQrRu353czjCFqr7mz955e0'
     ```
 
 ### List Your Meetings

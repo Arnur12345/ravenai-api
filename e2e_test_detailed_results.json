@@ -1,0 +1,26 @@
+{
+  "test_start_time": "2025-08-02T19:07:12.014533",
+  "user_registration": true,
+  "api_key_generation": true,
+  "concurrent_bots_launched": 0,
+  "transcript_retrieved": false,
+  "rag_qdrant_verified": false,
+  "rag_elasticsearch_verified": false,
+  "total_success": false,
+  "errors": [
+    "Bot 1 launch failed: Bot 1 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 2 launch failed: Bot 2 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 3 launch failed: Bot 3 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 4 launch failed: Bot 4 launch failed: HTTP 500: {\"detail\":{\"status\":\"error\",\"message\":\"An unexpected error occurred during bot startup: You must have the config attribute orm_mode=True to use from_orm\",\"meeting_id\":47}}",
+    "Bot 5 launch failed: Bot 5 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 6 launch failed: Bot 6 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 7 launch failed: Bot 7 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 8 launch failed: Bot 8 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 9 launch failed: Bot 9 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Bot 10 launch failed: Bot 10 launch failed: HTTP 403: {\"detail\":\"User has reached the maximum concurrent bot limit (1).\"}",
+    "Step 2 - Concurrent bots: No bots were launched successfully",
+    "Critical failure: No bots were launched successfully"
+  ],
+  "test_end_time": "2025-08-02T19:07:14.471958",
+  "test_duration": 2.457425
+}

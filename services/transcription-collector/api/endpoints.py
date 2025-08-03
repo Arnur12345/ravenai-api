@@ -162,7 +162,7 @@ async def get_meetings(
     stmt = select(Meeting).where(Meeting.user_id == current_user.id).order_by(Meeting.created_at.desc())
     result = await db.execute(stmt)
     meetings = result.scalars().all()
-    return MeetingListResponse(meetings=[MeetingResponse.from_orm(m) for m in meetings])
+    return MeetingListResponse(meetings=[MeetingResponse.model_validate(m) for m in meetings])
     
 @router.get("/transcripts/{platform}/{native_meeting_id}",
             response_model=TranscriptionResponse,
@@ -205,8 +205,8 @@ async def get_transcript_by_native_id(
     
     logger.info(f"[API Meet {internal_meeting_id}] Merged and sorted into {len(sorted_segments)} total segments.")
     
-    meeting_details = MeetingResponse.from_orm(meeting)
-    response_data = meeting_details.dict()
+    meeting_details = MeetingResponse.model_validate(meeting)
+    response_data = meeting_details.model_dump()
     response_data["segments"] = sorted_segments
     return TranscriptionResponse(**response_data)
 
@@ -232,6 +232,24 @@ async def get_transcript_internal(
         )
         
     segments = await _get_full_transcript_segments(meeting_id, db, redis_c)
+    
+    # Publish completed transcript to RAG system via Redis
+    if segments and redis_c:
+        try:
+            # Combine all segment texts into a single transcript
+            transcript_text = " ".join([segment.text for segment in segments if segment.text])
+            
+            if transcript_text.strip():  # Only publish if there's actual content
+                rag_data = {
+                    "meeting_id": meeting_id,
+                    "transcript": transcript_text
+                }
+                
+                await redis_c.publish("rag_ingestion_queue", json.dumps(rag_data))
+                logger.info(f"[Internal API] Published transcript for meeting {meeting_id} to RAG system via Redis channel 'rag_ingestion_queue'")
+        except Exception as e:
+            logger.error(f"[Internal API] Failed to publish transcript for meeting {meeting_id} to RAG system: {e}", exc_info=True)
+    
     return segments
 
 @router.patch("/meetings/{platform}/{native_meeting_id}",
@@ -242,6 +260,7 @@ async def update_meeting_data(
     platform: Platform,
     native_meeting_id: str,
     meeting_update: MeetingUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -271,7 +290,7 @@ async def update_meeting_data(
     try:
         if hasattr(meeting_update.data, 'dict'):
             # meeting_update.data is a MeetingDataUpdate pydantic object
-            update_data = meeting_update.data.dict(exclude_unset=True)
+            update_data = meeting_update.data.model_dump(exclude_unset=True)
             logger.debug(f"[API] Extracted update_data via .dict(): {update_data}")
         else:
             # Fallback: meeting_update.data is already a dict
@@ -328,7 +347,27 @@ async def update_meeting_data(
     
     logger.debug(f"[API] Meeting.data after commit and refresh: {meeting.data}")
     
-    return MeetingResponse.from_orm(meeting)
+    # Publish completed transcript to RAG system via Redis after successful update
+    redis_c = getattr(request.app.state, 'redis_client', None)
+    if redis_c:
+        try:
+            segments = await _get_full_transcript_segments(meeting.id, db, redis_c)
+            if segments:
+                # Combine all segment texts into a single transcript
+                transcript_text = " ".join([segment.text for segment in segments if segment.text])
+                
+                if transcript_text.strip():  # Only publish if there's actual content
+                    rag_data = {
+                        "meeting_id": meeting.id,
+                        "transcript": transcript_text
+                    }
+                    
+                    await redis_c.publish("rag_ingestion_queue", json.dumps(rag_data))
+                    logger.info(f"[API] Published transcript for meeting {meeting.id} to RAG system via Redis channel 'rag_ingestion_queue'")
+        except Exception as e:
+            logger.error(f"[API] Failed to publish transcript for meeting {meeting.id} to RAG system: {e}", exc_info=True)
+    
+    return MeetingResponse.model_validate(meeting)
 
 @router.delete("/meetings/{platform}/{native_meeting_id}",
               summary="Delete meeting and its transcripts",
@@ -392,4 +431,4 @@ async def delete_meeting(
     
     logger.info(f"[API] Successfully deleted meeting {internal_meeting_id} and all its data")
     
-    return {"message": f"Meeting {platform.value}/{native_meeting_id} and all its transcripts have been deleted"} 
+    return {"message": f"Meeting {platform.value}/{native_meeting_id} and all its transcripts have been deleted"}

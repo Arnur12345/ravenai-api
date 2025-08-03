@@ -1,9 +1,9 @@
 curl -X POST http://localhost:18056/bots \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: nLr1Sh37KkPTPjX1MSgHwGpxCEoJ8EV5ZttpPvkg" \
+  -H "X-API-Key: BTa9BcfzeIwoKbyXjCMyU4kBQi1vMbUeygc5koTq" \
   -d '{
     "platform": "google_meet",
-    "native_meeting_id": "tun-njym-qom",
+    "native_meeting_id": "wpx-zapw-ahw",
     "bot_name": "Heey",
     "language": "en",
     "task": "transcribe"

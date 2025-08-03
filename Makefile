@@ -56,13 +56,21 @@ endif
 			echo "WHISPER_MODEL_SIZE=tiny" >> env-example.cpu; \
 			echo "DEVICE_TYPE=cpu" >> env-example.cpu; \
 			echo "BOT_IMAGE_NAME=vexa-bot:dev" >> env-example.cpu; \
+			echo "# RAG System Configuration" >> env-example.cpu; \
+			echo "OPENAI_API_KEY=your_openai_api_key_here" >> env-example.cpu; \
+			echo "VOYAGE_API_KEY=your_voyage_api_key_here" >> env-example.cpu; \
+			echo "VEXA_API_KEY=your_vexa_api_key_here" >> env-example.cpu; \
+			echo "VEXA_API_URL=https://api.vexa.ai" >> env-example.cpu; \
 			echo "# Exposed Host Ports" >> env-example.cpu; \
 			echo "API_GATEWAY_HOST_PORT=8056" >> env-example.cpu; \
 			echo "ADMIN_API_HOST_PORT=8057" >> env-example.cpu; \
 			echo "TRAEFIK_WEB_HOST_PORT=9090" >> env-example.cpu; \
 			echo "TRAEFIK_DASHBOARD_HOST_PORT=8085" >> env-example.cpu; \
 			echo "TRANSCRIPTION_COLLECTOR_HOST_PORT=8123" >> env-example.cpu; \
+			echo "VEXA_RAG_HOST_PORT=8124" >> env-example.cpu; \
 			echo "POSTGRES_HOST_PORT=5438" >> env-example.cpu; \
+			echo "QDRANT_HOST_PORT=6333" >> env-example.cpu; \
+			echo "ELASTICSEARCH_HOST_PORT=9200" >> env-example.cpu; \
 		fi; \
 		cp env-example.cpu .env; \
 		echo "*** .env file created from env-example.cpu. Please review it. ***"; \
@@ -75,13 +83,21 @@ endif
 			echo "WHISPER_MODEL_SIZE=medium" >> env-example.gpu; \
 			echo "DEVICE_TYPE=cuda" >> env-example.gpu; \
 			echo "BOT_IMAGE_NAME=vexa-bot:dev" >> env-example.gpu; \
+			echo "# RAG System Configuration" >> env-example.gpu; \
+			echo "OPENAI_API_KEY=your_openai_api_key_here" >> env-example.gpu; \
+			echo "VOYAGE_API_KEY=your_voyage_api_key_here" >> env-example.gpu; \
+			echo "VEXA_API_KEY=your_vexa_api_key_here" >> env-example.gpu; \
+			echo "VEXA_API_URL=https://api.vexa.ai" >> env-example.gpu; \
 			echo "# Exposed Host Ports" >> env-example.gpu; \
 			echo "API_GATEWAY_HOST_PORT=8056" >> env-example.gpu; \
 			echo "ADMIN_API_HOST_PORT=8057" >> env-example.gpu; \
 			echo "TRAEFIK_WEB_HOST_PORT=9090" >> env-example.gpu; \
 			echo "TRAEFIK_DASHBOARD_HOST_PORT=8085" >> env-example.gpu; \
 			echo "TRANSCRIPTION_COLLECTOR_HOST_PORT=8123" >> env-example.gpu; \
+			echo "VEXA_RAG_HOST_PORT=8124" >> env-example.gpu; \
 			echo "POSTGRES_HOST_PORT=5438" >> env-example.gpu; \
+			echo "QDRANT_HOST_PORT=6333" >> env-example.gpu; \
+			echo "ELASTICSEARCH_HOST_PORT=9200" >> env-example.gpu; \
 		fi; \
 		cp env-example.gpu .env; \
 		echo "*** .env file created from env-example.gpu. Please review it. ***"; \
@@ -106,13 +122,21 @@ endif
 			echo "WHISPER_MODEL_SIZE=tiny" >> env-example.cpu; \
 			echo "DEVICE_TYPE=cpu" >> env-example.cpu; \
 			echo "BOT_IMAGE_NAME=vexa-bot:dev" >> env-example.cpu; \
+			echo "# RAG System Configuration" >> env-example.cpu; \
+			echo "OPENAI_API_KEY=your_openai_api_key_here" >> env-example.cpu; \
+			echo "VOYAGE_API_KEY=your_voyage_api_key_here" >> env-example.cpu; \
+			echo "VEXA_API_KEY=your_vexa_api_key_here" >> env-example.cpu; \
+			echo "VEXA_API_URL=https://api.vexa.ai" >> env-example.cpu; \
 			echo "# Exposed Host Ports" >> env-example.cpu; \
 			echo "API_GATEWAY_HOST_PORT=8056" >> env-example.cpu; \
 			echo "ADMIN_API_HOST_PORT=8057" >> env-example.cpu; \
 			echo "TRAEFIK_WEB_HOST_PORT=9090" >> env-example.cpu; \
 			echo "TRAEFIK_DASHBOARD_HOST_PORT=8085" >> env-example.cpu; \
 			echo "TRANSCRIPTION_COLLECTOR_HOST_PORT=8123" >> env-example.cpu; \
+			echo "VEXA_RAG_HOST_PORT=8124" >> env-example.cpu; \
 			echo "POSTGRES_HOST_PORT=5438" >> env-example.cpu; \
+			echo "QDRANT_HOST_PORT=6333" >> env-example.cpu; \
+			echo "ELASTICSEARCH_HOST_PORT=9200" >> env-example.cpu; \
 		fi; \
 		cp env-example.cpu .env; \
 		echo "*** .env file created from env-example.cpu. Please review it. ***"; \
@@ -125,13 +149,21 @@ endif
 			echo "WHISPER_MODEL_SIZE=medium" >> env-example.gpu; \
 			echo "DEVICE_TYPE=cuda" >> env-example.gpu; \
 			echo "BOT_IMAGE_NAME=vexa-bot:dev" >> env-example.gpu; \
+			echo "# RAG System Configuration" >> env-example.gpu; \
+			echo "OPENAI_API_KEY=your_openai_api_key_here" >> env-example.gpu; \
+			echo "VOYAGE_API_KEY=your_voyage_api_key_here" >> env-example.gpu; \
+			echo "VEXA_API_KEY=your_vexa_api_key_here" >> env-example.gpu; \
+			echo "VEXA_API_URL=https://api.vexa.ai" >> env-example.gpu; \
 			echo "# Exposed Host Ports" >> env-example.gpu; \
 			echo "API_GATEWAY_HOST_PORT=8056" >> env-example.gpu; \
 			echo "ADMIN_API_HOST_PORT=8057" >> env-example.gpu; \
 			echo "TRAEFIK_WEB_HOST_PORT=9090" >> env-example.gpu; \
 			echo "TRAEFIK_DASHBOARD_HOST_PORT=8085" >> env-example.gpu; \
 			echo "TRANSCRIPTION_COLLECTOR_HOST_PORT=8123" >> env-example.gpu; \
+			echo "VEXA_RAG_HOST_PORT=8124" >> env-example.gpu; \
 			echo "POSTGRES_HOST_PORT=5438" >> env-example.gpu; \
+			echo "QDRANT_HOST_PORT=6333" >> env-example.gpu; \
+			echo "ELASTICSEARCH_HOST_PORT=9200" >> env-example.gpu; \
 		fi; \
 		cp env-example.gpu .env; \
 		echo "*** .env file created from env-example.gpu. Please review it. ***"; \

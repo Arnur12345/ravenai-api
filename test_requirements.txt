@@ -1,0 +1,23 @@
+# Additional requirements for End-to-End Testing
+# Install with: pip install -r test_requirements.txt
+
+# Async HTTP client for API calls
+httpx>=0.27.0
+
+# Qdrant client for vector database verification
+qdrant-client>=1.7.0
+
+# Elasticsearch client for text search verification
+elasticsearch>=8.11.0
+
+# Already included in main requirements.txt but ensure latest version
+python-dotenv>=1.0.0
+
+# For concurrent operations (built-in with Python 3.7+)
+# asyncio - built-in
+
+# For JSON handling (built-in)
+# json - built-in
+
+# For logging (built-in)
+# logging - built-in 

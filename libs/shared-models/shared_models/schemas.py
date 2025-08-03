@@ -347,3 +347,25 @@ class BotStatus(BaseModel):
 class BotStatusResponse(BaseModel):
     running_bots: List[BotStatus]
 # --- END Bot Status Schemas ---
+
+# --- Query Endpoint Schemas ---
+class QueryRequest(BaseModel):
+    """Request schema for the /v1/query endpoint."""
+    question: str = Field(..., description="The question to ask about the meeting content")
+    meeting_id: str = Field(..., description="The ID of the meeting to query")
+    k: Optional[int] = Field(5, description="Number of relevant sources to retrieve (default: 5)")
+
+class QuerySource(BaseModel):
+    """Schema for a single source in query response."""
+    content: str = Field(..., description="The relevant content from the transcript")
+    timestamp: Optional[str] = Field(None, description="Timestamp of the content")
+    speaker: Optional[str] = Field(None, description="Speaker who said this content")
+    score: Optional[float] = Field(None, description="Relevance score for this source")
+
+class QueryResponse(BaseModel):
+    """Response schema for the /v1/query endpoint."""
+    answer: str = Field(..., description="AI-generated answer to the question")
+    meeting_id: str = Field(..., description="The ID of the meeting that was queried")
+    sources: List[QuerySource] = Field(..., description="List of relevant sources used to generate the answer")
+    total_sources: int = Field(..., description="Total number of sources found")
+# --- END Query Endpoint Schemas ---

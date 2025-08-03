@@ -10,6 +10,7 @@ services:
       - ADMIN_API_URL=http://admin-api:8001
       - BOT_MANAGER_URL=http://bot-manager:8080
       - TRANSCRIPTION_COLLECTOR_URL=http://transcription-collector:8000
+      - VEXA_RAG_URL=http://vexa-contextual-rag:8000
       - LOG_LEVEL=DEBUG
     init: true
     depends_on:
@@ -279,6 +280,68 @@ services:
       - vexa_default
     restart: unless-stopped
 
+  vexa-contextual-rag:
+    build:
+      context: .
+      dockerfile: services/vexa-contextual-rag/Dockerfile
+    ports:
+      - "${VEXA_RAG_HOST_PORT:-8124}:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - LOG_LEVEL=DEBUG
+    init: true
+    depends_on:
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+    networks:
+      - vexa_default
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rag-api-router.rule=PathPrefix(`/rag-api`)"
+      - "traefik.http.routers.rag-api-router.entrypoints=web"
+      - "traefik.http.services.rag-api-service.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.rag-api-stripprefix.stripprefix.prefixes=/rag-api"
+      - "traefik.http.routers.rag-api-router.middlewares=rag-api-stripprefix"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_HOST_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - vexa_default
+    restart: unless-stopped
+
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    ports:
+      - "${ELASTICSEARCH_HOST_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_TRANSPORT_HOST_PORT:-9300}:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - vexa_default
+    restart: unless-stopped
+
   redis:
     image: redis:7.0-alpine
     command:
@@ -311,6 +374,8 @@ services:
 volumes:
   redis-data:
   postgres-data:
+  qdrant-data:
+  elasticsearch-data:
 
 networks:
   vexa_default:

@@ -737,7 +737,7 @@ async def list_meetings_with_users(
         )
         for meeting in meetings if meeting.user
     ]
-        
+
     return PaginatedMeetingUserStatResponse(total=total, items=response_items)
 
 # App events

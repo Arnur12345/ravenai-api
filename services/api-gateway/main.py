@@ -3,6 +3,8 @@ from fastapi import FastAPI, Request, Response, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import APIKeyHeader
+from fastapi.security.utils import get_authorization_scheme_param
+from fastapi import Security
 import httpx
 import os
 from dotenv import load_dotenv
@@ -19,6 +21,11 @@ from shared_models.schemas import (
     Platform, # Import Platform enum for path parameters
     BotStatusResponse # ADDED: Import response model for documentation
 )
+from shared_models.models import APIToken, User, Meeting
+from shared_models.database import get_db, AsyncSession
+from shared_models.schemas import QueryRequest, QueryResponse
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 load_dotenv()
 
@@ -26,15 +33,7 @@ load_dotenv()
 ADMIN_API_URL = os.getenv("ADMIN_API_URL", "http://admin-api:8001")
 BOT_MANAGER_URL = os.getenv("BOT_MANAGER_URL", "http://bot-manager:8080")
 TRANSCRIPTION_COLLECTOR_URL = os.getenv("TRANSCRIPTION_COLLECTOR_URL", "http://transcription-collector:8000")
-
-# Response Models
-# class BotResponseModel(BaseModel): ...
-# class MeetingModel(BaseModel): ...
-# class MeetingsResponseModel(BaseModel): ...
-# class TranscriptSegmentModel(BaseModel): ...
-# class TranscriptResponseModel(BaseModel): ...
-# class UserModel(BaseModel): ...
-# class TokenModel(BaseModel): ...
+VEXA_RAG_URL = os.getenv("VEXA_RAG_URL", "http://vexa-contextual-rag:8000")
 
 # Security Schemes for OpenAPI
 api_key_scheme = APIKeyHeader(name="X-API-Key", description="API Key for client operations", auto_error=False)
@@ -48,13 +47,14 @@ app = FastAPI(
     Provides access to:
     - Bot Management (Starting/Stopping transcription bots)
     - Transcription Retrieval
+    - AI-Powered Meeting Query (Ask questions about meeting content)
     - User & Token Administration (Admin only)
     
     ## Authentication
     
     Two types of API keys are used:
     
-    1.  **`X-API-Key`**: Required for all regular client operations (e.g., managing bots, getting transcripts). Obtain your key from an administrator.
+    1.  **`X-API-Key`**: Required for all regular client operations (e.g., managing bots, getting transcripts, querying meetings). Obtain your key from an administrator.
     2.  **`X-Admin-API-Key`**: Required *only* for administrative endpoints (prefixed with `/admin`). This key is configured server-side.
     
     Include the appropriate header in your requests.
@@ -123,6 +123,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Authentication Dependencies ---
+async def get_current_user(api_key: str = Security(api_key_scheme), db: AsyncSession = Depends(get_db)) -> User:
+    """Dependency to verify X-API-Key and return the associated User."""
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API Key"
+        )
+    
+    result = await db.execute(
+        select(APIToken).where(APIToken.token == api_key).options(selectinload(APIToken.user))
+    )
+    db_token = result.scalars().first()
+    
+    if not db_token or not db_token.user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API Key"
+        )
+    
+    return db_token.user
 
 # --- HTTP Client --- 
 # Use a single client instance for connection pooling
@@ -330,6 +352,87 @@ async def set_user_webhook_proxy(request: Request):
     url = f"{ADMIN_API_URL}/user/webhook"
     return await forward_request(app.state.http_client, "PUT", url, request)
 
+# --- Query Endpoint ---
+@app.post("/v1/query",
+          tags=["Query"],
+          summary="Query meeting content",
+          description="Ask questions about meeting content using AI-powered search and generation.",
+          response_model=QueryResponse,
+          status_code=status.HTTP_200_OK)
+async def query_meeting(
+    query_request: QueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Query meeting content with AI-powered search and answer generation."""
+    
+    # Check if user has access to the specified meeting_id
+    stmt = select(Meeting).where(
+        Meeting.user_id == current_user.id,
+        Meeting.id == query_request.meeting_id
+    )
+    result = await db.execute(stmt)
+    meeting = result.scalars().first()
+    
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with ID {query_request.meeting_id} not found or access denied"
+        )
+    
+    # Forward request to RAG system
+    rag_request_data = {
+        "question": query_request.question,
+        "meeting_id": query_request.meeting_id,
+        "k": query_request.k
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{VEXA_RAG_URL}/search",
+                json=rag_request_data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 404:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No content found for meeting ID {query_request.meeting_id}"
+                )
+            elif response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"RAG service error: {response.text}"
+                )
+            
+            rag_response = response.json()
+            
+            # Return the response in the expected format
+            return QueryResponse(
+                answer=rag_response["answer"],
+                meeting_id=rag_response["meeting_id"],
+                sources=rag_response["sources"],
+                total_sources=rag_response["total_sources"]
+            )
+            
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"RAG service unavailable: {exc}"
+        )
+
+# --- RAG Service Routes ---
+@app.api_route("/rag/{path:path}", methods=["GET", "POST", "PUT", "DELETE"], 
+               tags=["RAG"],
+               summary="Forward RAG requests",
+               description="Forwards requests to the Vexa Contextual RAG service for hybrid search and indexing operations.",
+               dependencies=[Depends(api_key_scheme)])
+async def forward_rag_request(request: Request, path: str):
+    """Generic forwarder for all RAG endpoints."""
+    url = f"{VEXA_RAG_URL}/{path}"
+    return await forward_request(app.state.http_client, request.method, url, request)
+
 # --- Admin API Routes --- 
 @app.api_route("/admin/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], 
                tags=["Administration"],
@@ -344,4 +447,4 @@ async def forward_admin_request(request: Request, path: str):
 
 # --- Main Execution --- 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
